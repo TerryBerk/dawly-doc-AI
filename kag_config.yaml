@@ -1,0 +1,242 @@
+# KAG Configuration for Dawly Music Hardware Documentation
+# Version: 1.0.0
+
+project:
+  name: dawly_docs
+  domain: music_hardware
+  language: en
+  description: "Knowledge graph for music production hardware documentation"
+
+# Database Configuration
+storage:
+  type: postgresql
+  host: ${POSTGRES_HOST}
+  port: ${POSTGRES_PORT}
+  database: ${POSTGRES_DB}
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+  
+# Vector Store Configuration  
+vector_store:
+  type: elasticsearch
+  host: ${ELASTICSEARCH_HOST}
+  port: ${ELASTICSEARCH_PORT}
+  index_name: ${ELASTICSEARCH_INDEX}
+  embedding_dimension: ${EMBEDDING_DIMENSION}
+
+# LLM Configuration
+llm:
+  provider: ${LLM_PROVIDER}
+  model: ${LLM_MODEL}
+  api_key: ${OPENAI_API_KEY}
+  temperature: ${LLM_TEMPERATURE}
+  max_tokens: ${LLM_MAX_TOKENS}
+  
+# Embedding Model Configuration
+embedding:
+  model: ${EMBEDDING_MODEL}
+  dimension: ${EMBEDDING_DIMENSION}
+  batch_size: 32
+
+# KG Builder Configuration (Indexer)
+kg_builder:
+  # Document Scanner
+  scanner:
+    register_name: "pdf_scanner"
+    supported_formats: ["pdf"]
+    max_file_size_mb: 100
+    
+  # Document Reader/Parser
+  reader:
+    register_name: "pdf_reader"
+    chunk_size: ${MAX_CHUNK_SIZE}
+    chunk_overlap: ${CHUNK_OVERLAP}
+    preserve_tables: true
+    extract_images: false
+    
+  # Entity Extractor
+  extractor:
+    register_name: "schema_constraint_extractor"
+    # Schema-constrained extraction for music devices
+    entity_types:
+      - Device
+      - ConnectionPort
+      - Documentation
+      - ConnectionProcedure
+    relation_types:
+      - has_port
+      - documented_in
+      - connects_to
+      
+  # Vectorizer
+  vectorizer:
+    register_name: "openai_vectorizer"
+    model: ${EMBEDDING_MODEL}
+    batch_size: 32
+    
+  # Processing
+  processing:
+    num_parallel_files: 2
+    num_parallel_chains: 4
+    enable_checkpoint: true
+    checkpoint_dir: "./checkpoints"
+
+# KG Solver Configuration (Reasoner)
+kg_solver:
+  # Query Understanding
+  query_processor:
+    enable_entity_linking: true
+    enable_query_rewrite: true
+    max_query_length: 500
+    
+  # Retrieval Strategy
+  retrieval:
+    strategy: "hybrid"  # hybrid, vector_only, graph_only
+    top_k: 10
+    min_score: 0.7
+    enable_rerank: true
+    
+  # Reasoning Engine
+  reasoner:
+    enable_multi_hop: true
+    max_hops: 3
+    enable_logical_reasoning: true
+    
+  # Response Generation
+  generator:
+    prompt_template: "music_hardware_qa"
+    include_sources: true
+    max_sources: 5
+    confidence_threshold: 0.6
+
+# SPG Schema Definition
+schema:
+  # Entity Types
+  entity_types:
+    Device:
+      properties:
+        - name: name
+          type: string
+          required: true
+        - name: manufacturer
+          type: string
+          required: true
+        - name: model
+          type: string
+          required: true
+        - name: type
+          type: enum
+          values: ["synthesizer", "drum_machine", "audio_interface", "eurorack_module", "controller", "effect"]
+          required: true
+        - name: release_year
+          type: integer
+        - name: description
+          type: text
+          
+    ConnectionPort:
+      properties:
+        - name: port_id
+          type: string
+          required: true
+        - name: type
+          type: enum
+          values: ["midi_in", "midi_out", "midi_thru", "audio_in_left", "audio_in_right", "audio_out_left", "audio_out_right", "power", "cv_in", "cv_out", "gate_in", "gate_out", "clock_in", "clock_out", "usb", "ethernet"]
+          required: true
+        - name: label
+          type: string
+        - name: specifications
+          type: json
+          
+    Documentation:
+      properties:
+        - name: title
+          type: string
+          required: true
+        - name: pdf_path
+          type: string
+          required: true
+        - name: version
+          type: string
+        - name: page_count
+          type: integer
+        - name: language
+          type: string
+          default: "en"
+          
+    ConnectionProcedure:
+      properties:
+        - name: procedure_id
+          type: string
+          required: true
+        - name: title
+          type: string
+          required: true
+        - name: steps
+          type: array
+          items: string
+        - name: requirements
+          type: array
+          items: string
+        - name: warnings
+          type: array
+          items: string
+          
+  # Relation Types
+  relation_types:
+    - name: has_port
+      source: Device
+      target: ConnectionPort
+      cardinality: one_to_many
+      
+    - name: documented_in
+      source: Device
+      target: Documentation
+      cardinality: many_to_many
+      
+    - name: connects_to
+      source: ConnectionPort
+      target: ConnectionPort
+      properties:
+        - name: cable_type
+          type: string
+        - name: compatibility
+          type: string
+          
+    - name: procedure_for
+      source: ConnectionProcedure
+      target: Device
+      cardinality: many_to_one
+      
+    - name: involves_ports
+      source: ConnectionProcedure
+      target: ConnectionPort
+      cardinality: many_to_many
+
+# Prompts Configuration
+prompts:
+  music_hardware_qa:
+    system: |
+      You are a knowledgeable assistant specialized in music production hardware.
+      You help users understand device specifications, connections, and setup procedures.
+      Always provide accurate information based on official documentation.
+      
+    user: |
+      Context from documentation:
+      {context}
+      
+      Device: {device_name}
+      Question: {question}
+      
+      Provide a clear, concise answer with specific page references where applicable.
+      If you're unsure, say so rather than guessing.
+      
+# Logging
+logging:
+  level: ${LOG_LEVEL}
+  format: ${LOG_FORMAT}
+  handlers:
+    - type: console
+    - type: file
+      filename: logs/kag.log
+      max_bytes: 10485760  # 10MB
+      backup_count: 5
