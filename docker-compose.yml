@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dawly-kag-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dawly_kag}
+      POSTGRES_USER: ${POSTGRES_USER:-kaguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kaguser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dawly-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dawly-doc-ai
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-dawly_kag}
+      - POSTGRES_USER=${POSTGRES_USER:-kaguser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./app:/app/app
+      - ./kag:/app/kag
+      - ./docs_data:/app/docs_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - dawly-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  dawly-network:
+    driver: bridge
