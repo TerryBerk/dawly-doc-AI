@@ -15,6 +15,7 @@ elasticsearch==8.11.0
 sentence-transformers==2.3.1
 torch==2.1.2
 transformers==4.37.0
+rank-bm25==0.2.2
 
 # PDF Processing
 PyPDF2==3.0.1
@@ -27,8 +28,8 @@ langchain-community==0.0.16
 tiktoken==0.5.2
 
 # Redis for Caching
-redis==5.0.1
-hiredis==2.3.2
+redis[hiredis]==5.0.1
+redis[asyncio]==5.0.1
 
 # HTTP Clients
 httpx==0.26.0
