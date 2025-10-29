@@ -1,0 +1,65 @@
+version: '3.8'
+
+# Development Docker Compose for Dawly Documentation AI
+# Minimal setup for local testing
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dawly-kag-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dawly_kag}
+      POSTGRES_USER: ${POSTGRES_USER:-kaguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword123}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kaguser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dawly-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: dawly-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - dawly-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: dawly-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dawly-network
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+
+networks:
+  dawly-network:
+    driver: bridge
